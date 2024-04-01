@@ -1,10 +1,133 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Home</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing</title>
+    <script src="https://trackingjs.com/build/tracking.js"></script>
+    <script src="https://trackingjs.com/build/data/eye.js"></script>
+    <script src="https://trackingjs.com/build/data/mouth.js"></script>
+    <script src="https://trackingjs.com/build/data/nose.js"></script>
+    <script src="https://trackingjs.com/examples/data/face-min.js"></script>
 </head>
 <body>
-<h1> Hello World</h1>
+    <input type="file" id="fileInput">
+    <button onclick="uploadImage()">Upload Image</button>
+    <button onclick="convertToGrayscale()">Convert to Grayscale</button>
+    <button onclick="applyFastDetection()">Apply Fast Detection</button>
+    <button onclick="generateMarker()">Generate Marker</button>
+    <canvas id="outputCanvas"></canvas>
+    <div id="markerDisplay"></div>
+
+    <script>
+        function uploadImage() {
+            var fileInput = document.getElementById('fileInput');
+            var outputCanvas = document.getElementById('outputCanvas');
+            var ctx = outputCanvas.getContext('2d');
+
+            var file = fileInput.files[0];
+            var reader = new FileReader();
+            reader.onload = function(event) {
+                var img = new Image();
+                img.onload = function() {
+                    outputCanvas.width = img.width;
+                    outputCanvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+
+        function convertToGrayscale() {
+            var outputCanvas = document.getElementById('outputCanvas');
+            var ctx = outputCanvas.getContext('2d');
+            var imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+            var data = imageData.data;
+
+            for (var i = 0; i < data.length; i += 4) {
+                var brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                data[i] = brightness;
+                data[i + 1] = brightness;
+                data[i + 2] = brightness;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function applyFastDetection() {
+            var outputCanvas = document.getElementById('outputCanvas');
+            var width = outputCanvas.width;
+            var height = outputCanvas.height;
+            var context = outputCanvas.getContext('2d');
+
+            var image = new Image();
+            image.onload = function() {
+                var canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(image, 0, 0, width, height);
+
+                var doFindFeatures = function() {
+                    context.drawImage(image, 0, 0, width, height);
+
+                    var imageData = context.getImageData(0, 0, width, height);
+                    var gray = tracking.Image.grayscale(imageData.data, width, height);
+                    var corners = tracking.Fast.findCorners(gray, width, height);
+
+                    for (var i = 0; i < corners.length; i += 2) {
+                        context.fillStyle = '#f00';
+                        context.fillRect(corners[i], corners[i + 1], 3, 3);
+                    }
+                };
+
+                doFindFeatures();
+
+                var gui = new dat.GUI();
+                gui.add(window, 'fastThreshold', 0, 100).onChange(doFindFeatures);
+            };
+
+            image.src = outputCanvas.toDataURL();
+        }
+
+        function generateMarker() {
+            var markerCanvas = document.createElement('canvas');
+            markerCanvas.width = 200; // Set marker canvas size
+            markerCanvas.height = 200;
+
+            var markerContext = markerCanvas.getContext('2d');
+            markerContext.fillStyle = '#ffffff'; // White background
+            markerContext.fillRect(0, 0, markerCanvas.width, markerCanvas.height);
+
+            markerContext.fillStyle = '#ff0000'; // Red square
+            markerContext.fillRect(50, 50, 100, 100);
+
+            var markerImage = new Image();
+            markerImage.src = markerCanvas.toDataURL();
+
+            var markerDisplay = document.getElementById('markerDisplay');
+            markerDisplay.innerHTML = ''; // Clear previous marker
+            markerDisplay.appendChild(markerImage); // Append the marker image
+
+            // Convert to .patt format
+            var pattData = '1 0 0 1 0 0\n';
+            for (var y = 0; y < markerCanvas.height; y++) {
+                for (var x = 0; x < markerCanvas.width; x++) {
+                    var rgba = markerContext.getImageData(x, y, 1, 1).data;
+                    var bw = (rgba[0] + rgba[1] + rgba[2]) / 3 > 127 ? 1 : 0;
+                    pattData += bw + ' ';
+                }
+                pattData += '\n';
+            }
+
+            // Create download link for .patt file
+            var downloadLink = document.createElement('a');
+            downloadLink.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(pattData);
+            downloadLink.download = 'marker.patt';
+            downloadLink.textContent = 'Download .patt';
+            markerDisplay.appendChild(downloadLink);
+        }
+    </script>
 </body>
 </html>
